@@ -16,9 +16,11 @@ class MainWindow:
         self.preview_line = None
         self.lines = []
         self.clipped_lines = []
+
         self.selected_algorithm = tk.StringVar(
             value="cohen-sutherland"
         )
+
         self.line_color = tk.StringVar(
             value="black"
         )
@@ -177,6 +179,18 @@ class MainWindow:
             fill="x",
         )
 
+        clear_button = tk.Button(
+            self.control_panel,
+            text="Clear",
+            command=self._clear_canvas,
+        )
+
+        clear_button.pack(
+            padx=15,
+            pady=(0, 15),
+            fill="x",
+        )
+
     def _bind_events(self):
         self.canvas.bind("<Button-1>", self._on_mouse_down)
         self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
@@ -323,3 +337,22 @@ class MainWindow:
             )
 
             self.clipped_canvas_items.append(item)
+
+    def _clear_canvas(self):
+        self.canvas.delete("all")
+
+        self.lines.clear()
+        self.clipped_lines.clear()
+        self.clipped_canvas_items.clear()
+
+        self.clipping_window = None
+
+        self.preview_line = None
+        self.window_preview = None
+
+        self.is_drawing_window = False
+
+        self.start_x = None
+        self.start_y = None
+        self.window_start_x = None
+        self.window_start_y = None
