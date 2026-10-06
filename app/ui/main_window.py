@@ -125,6 +125,34 @@ class MainWindow:
             fill="x",
         )
 
+        thickness_label = tk.Label(
+            self.control_panel,
+            text="Line Thickness",
+            background="#eeeeee",
+        )
+
+        thickness_label.pack(
+            padx=15,
+            pady=(0, 5),
+            anchor="w",
+        )
+
+        thickness_menu = tk.OptionMenu(
+            self.control_panel,
+            self.line_width,
+            1,
+            2,
+            3,
+            4,
+            5,
+        )
+
+        thickness_menu.pack(
+            padx=15,
+            pady=(0, 15),
+            fill="x",
+        )
+
         self.draw_window_button = tk.Button(
             self.control_panel,
             text="Draw Clipping Window",
