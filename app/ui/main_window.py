@@ -1,5 +1,6 @@
 import tkinter as tk
 from app.core.geometry import Line, Point, Rectangle
+from app.services.clipping_service import clip_line
 
 
 class MainWindow:
@@ -14,6 +15,13 @@ class MainWindow:
         self.start_y = None
         self.preview_line = None
         self.lines = []
+        self.clipped_lines = []
+        self.selected_algorithm = tk.StringVar(
+            value="cohen-sutherland"
+        )
+
+        self.clipping_window_item = None
+        self.clipped_canvas_items = []
 
         self.is_drawing_window = False
         self.window_start_x = None
@@ -58,6 +66,31 @@ class MainWindow:
 
         self.control_panel.grid_propagate(False)
 
+        algorithm_label = tk.Label(
+            self.control_panel,
+            text="Clipping Algorithm",
+            background="#f80b0b",
+        )
+
+        algorithm_label.pack(
+            padx=15,
+            pady=(15, 5),
+            anchor="w",
+        )
+
+        algorithm_menu = tk.OptionMenu(
+            self.control_panel,
+            self.selected_algorithm,
+            "cohen-sutherland",
+            "liang-barsky",
+        )
+
+        algorithm_menu.pack(
+            padx=15,
+            pady=(0, 15),
+            fill="x",
+        )
+
         self.draw_window_button = tk.Button(
             self.control_panel,
             text="Draw Clipping Window",
@@ -67,6 +100,18 @@ class MainWindow:
         self.draw_window_button.pack(
             padx=15,
             pady=15,
+            fill="x",
+        )
+
+        self.clip_button = tk.Button(
+            self.control_panel,
+            text="Clip Line",
+            command=self._clip_lines,
+        )
+
+        self.clip_button.pack(
+            padx=15,
+            pady=(0, 15),
             fill="x",
         )
 
@@ -169,3 +214,43 @@ class MainWindow:
 
     def _start_drawing_window(self):
         self.is_drawing_window = True
+
+    def _clip_lines(self):
+        if self.clipping_window is None:
+            print("No clipping window defined.")
+            return
+
+        if not self.lines:
+            print("No lines to clip.")
+            return
+
+        algorithm = self.selected_algorithm.get()
+
+        print("Algorithm:", algorithm)
+
+        self.clipped_lines.clear()
+
+        for line in self.lines:
+            clipped = clip_line(
+                line,
+                self.clipping_window,
+                algorithm,
+            )
+
+            print("Original:", line)
+            print("Clipped:", clipped)
+            print()
+
+            if clipped is None:
+                continue
+
+            self.clipped_lines.append(clipped)
+
+            self.canvas.create_line(
+                clipped.start.x,
+                clipped.start.y,
+                clipped.end.x,
+                clipped.end.y,
+                fill="red",
+                width=3,
+            )
