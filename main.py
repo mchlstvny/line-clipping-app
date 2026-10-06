@@ -1,4 +1,4 @@
-from app.algorithms.cohen_sutherland import clip_line
+from app.algorithms.liang_barsky import clip_line
 from app.core.geometry import Line, Point, Rectangle
 
 
@@ -11,11 +11,11 @@ def main():
     )
 
     test_lines = [
-        Line(Point(200, 150), Point(300, 200)),
-        Line(Point(100, 175), Point(250, 175)),
-        Line(Point(250, 150), Point(400, 150)),
-        Line(Point(50, 50), Point(100, 75)),
-        Line(Point(50, 50), Point(450, 300)),
+        Line(Point(200, 150), Point(300, 200)),  # Completely inside
+        Line(Point(100, 175), Point(250, 175)),  # Enters from left
+        Line(Point(250, 150), Point(400, 150)),  # Exits to right
+        Line(Point(50, 50), Point(100, 75)),     # Completely outside
+        Line(Point(50, 50), Point(450, 300)),    # Crosses diagonally
     ]
 
     for index, line in enumerate(test_lines, start=1):
