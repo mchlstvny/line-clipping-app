@@ -224,6 +224,11 @@ class MainWindow:
             print("No lines to clip.")
             return
 
+        for item in self.clipped_canvas_items:
+            self.canvas.delete(item)
+
+        self.clipped_canvas_items.clear()
+
         algorithm = self.selected_algorithm.get()
 
         print("Algorithm:", algorithm)
@@ -246,7 +251,7 @@ class MainWindow:
 
             self.clipped_lines.append(clipped)
 
-            self.canvas.create_line(
+            item = self.canvas.create_line(
                 clipped.start.x,
                 clipped.start.y,
                 clipped.end.x,
@@ -254,3 +259,5 @@ class MainWindow:
                 fill="red",
                 width=3,
             )
+
+            self.clipped_canvas_items.append(item)
