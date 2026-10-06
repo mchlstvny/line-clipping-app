@@ -19,6 +19,13 @@ class MainWindow:
         self.selected_algorithm = tk.StringVar(
             value="cohen-sutherland"
         )
+        self.line_color = tk.StringVar(
+            value="black"
+        )
+
+        self.line_width = tk.IntVar(
+            value=2
+        )
 
         self.clipping_window_item = None
         self.clipped_canvas_items = []
@@ -91,6 +98,33 @@ class MainWindow:
             fill="x",
         )
 
+        color_label = tk.Label(
+            self.control_panel,
+            text="Line Color",
+            background="#eeeeee",
+        )
+
+        color_label.pack(
+            padx=15,
+            pady=(0, 5),
+            anchor="w",
+        )
+
+        color_menu = tk.OptionMenu(
+            self.control_panel,
+            self.line_color,
+            "black",
+            "red",
+            "blue",
+            "green",
+        )
+
+        color_menu.pack(
+            padx=15,
+            pady=(0, 15),
+            fill="x",
+        )
+
         self.draw_window_button = tk.Button(
             self.control_panel,
             text="Draw Clipping Window",
@@ -144,8 +178,8 @@ class MainWindow:
             self.start_y,
             self.start_x,
             self.start_y,
-            fill="black",
-            width=2,
+            fill=self.line_color.get(),
+            width=self.line_width.get(),
         )
 
     def _on_mouse_drag(self, event):
@@ -256,8 +290,8 @@ class MainWindow:
                 clipped.start.y,
                 clipped.end.x,
                 clipped.end.y,
-                fill="red",
-                width=3,
+                fill=self.line_color.get(),
+                width=self.line_width.get(),
             )
 
             self.clipped_canvas_items.append(item)
