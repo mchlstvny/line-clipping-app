@@ -1,5 +1,5 @@
-from app.algorithms.liang_barsky import clip_line
 from app.core.geometry import Line, Point, Rectangle
+from app.services.clipping_service import clip_line
 
 
 def main():
@@ -10,20 +10,22 @@ def main():
         ymax=250,
     )
 
-    test_lines = [
-        Line(Point(200, 150), Point(300, 200)),  # Completely inside
-        Line(Point(100, 175), Point(250, 175)),  # Enters from left
-        Line(Point(250, 150), Point(400, 150)),  # Exits to right
-        Line(Point(50, 50), Point(100, 75)),     # Completely outside
-        Line(Point(50, 50), Point(450, 300)),    # Crosses diagonally
+    line = Line(
+        start=Point(50, 50),
+        end=Point(450, 300),
+    )
+
+    algorithms = [
+        "cohen-sutherland",
+        "liang-barsky",
     ]
 
-    for index, line in enumerate(test_lines, start=1):
-        result = clip_line(line, window)
+    for algorithm in algorithms:
+        result = clip_line(line, window, algorithm)
 
-        print(f"Line {index}:")
-        print(f"  Original: {line}")
-        print(f"  Clipped:  {result}")
+        print(f"Algorithm: {algorithm}")
+        print(f"Original:  {line}")
+        print(f"Clipped:   {result}")
         print()
 
 
