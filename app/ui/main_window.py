@@ -2,6 +2,8 @@ import tkinter as tk
 import math
 from app.core.geometry import Line, Point, Rectangle
 from app.services.clipping_service import clip_line
+from app.ui.panels import Panels
+from app.ui.toolbar import Toolbar
 
 
 class MainWindow:
@@ -42,70 +44,10 @@ class MainWindow:
         self._bind_events()
 
     def _build_ui(self):
-        for column in range(3):
-            self.root.columnconfigure(column, weight=1, uniform="layout")
+        self.root.columnconfigure(0, weight=1)
+        self.root.columnconfigure(1, weight=1)
+        self.root.columnconfigure(2, weight=1)
         self.root.rowconfigure(1, weight=1)
-
-        create_frame = tk.LabelFrame(self.root, text="Create", padx=8, pady=5)
-        create_frame.grid(row=0, column=0, sticky="nsew", padx=(12, 5), pady=10)
-
-        for row, (label, value) in enumerate(
-            (("Line", "line"), ("Clipping Area", "clipping-area"),
-             ("Rectangle", "rectangle"), ("Circle", "circle"))
-        ):
-            tk.Radiobutton(
-                create_frame,
-                text=label,
-                value=value,
-                variable=self.create_mode,
-                command=self._on_create_mode_changed,
-            ).grid(row=row, column=0, sticky="w")
-
-        algorithm_frame = tk.LabelFrame(self.root, text="Algorithm", padx=8, pady=5)
-        algorithm_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=10)
-
-        for row, (label, value) in enumerate(
-            (("Cohen-Sutherland", "cohen-sutherland"),
-             ("Liang-Barsky", "liang-barsky"))
-        ):
-            tk.Radiobutton(
-                algorithm_frame,
-                text=label,
-                value=value,
-                variable=self.selected_algorithm,
-            ).grid(row=row, column=0, sticky="w")
-
-        style_frame = tk.LabelFrame(
-            self.root,
-            text="Color & Thickness",
-            padx=8,
-            pady=5,
-        )
-        style_frame.grid(row=0, column=2, sticky="nsew", padx=(5, 12), pady=10)
-        style_frame.columnconfigure(1, weight=1)
-
-        tk.Label(style_frame, text="Color").grid(row=0, column=0, sticky="w", padx=(0, 8))
-        tk.OptionMenu(
-            style_frame,
-            self.line_color,
-            "Black",
-            "Red",
-            "Blue",
-            "Green",
-        ).grid(row=0, column=1, sticky="ew")
-
-        tk.Label(style_frame, text="Thickness").grid(
-            row=1, column=0, sticky="w", padx=(0, 8)
-        )
-        tk.OptionMenu(
-            style_frame,
-            self.line_width,
-            1,
-            2,
-            3,
-            4,
-            5,
-        ).grid(row=1, column=1, sticky="ew")
 
         self.canvas = tk.Canvas(self.root, background="white", highlightthickness=1)
         self.canvas.grid(
@@ -117,38 +59,38 @@ class MainWindow:
             pady=(0, 12),
         )
 
-        lists_frame = tk.Frame(self.root)
-        lists_frame.grid(
+        self.lists_frame = tk.Frame(self.root)
+        self.lists_frame.grid(
             row=1,
             column=2,
             sticky="nsew",
             padx=(5, 12),
             pady=(0, 12),
         )
-        lists_frame.columnconfigure(0, weight=1)
-        lists_frame.rowconfigure(0, weight=1)
-        lists_frame.rowconfigure(1, weight=1)
+        self.lists_frame.columnconfigure(0, weight=1)
+        self.lists_frame.rowconfigure(0, weight=1)
+        self.lists_frame.rowconfigure(1, weight=0)
 
-        before_frame = tk.LabelFrame(lists_frame, text="Lines Before Clipping", padx=5, pady=5)
-        before_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 5))
-        before_frame.rowconfigure(0, weight=1)
-        before_frame.columnconfigure(0, weight=1)
-        self.lines_before_list = tk.Listbox(before_frame, height=6, exportselection=False)
-        self.lines_before_list.grid(row=0, column=0, sticky="nsew")
+        self.panels = Panels(self.lists_frame)
+        self.panels.grid(row=0, column=0, sticky="nsew")
+        actions = tk.Frame(self.lists_frame)
+        actions.grid(row=1, column=0, sticky="ew", pady=(8, 0))
 
-        after_frame = tk.LabelFrame(lists_frame, text="Lines After Clipping", padx=5, pady=5)
-        after_frame.grid(row=1, column=0, sticky="nsew", pady=(5, 0))
-        after_frame.rowconfigure(0, weight=1)
-        after_frame.columnconfigure(0, weight=1)
-        self.lines_after_list = tk.Listbox(after_frame, height=6, exportselection=False)
-        self.lines_after_list.grid(row=0, column=0, sticky="nsew")
+        self.toolbar = Toolbar(
+            self.root,
+            self.create_mode,
+            self.selected_algorithm,
+            self.line_color,
+            self.line_width,
+            self._on_create_mode_changed,
+            self._clip_lines,
+            self._clear_canvas,
+            actions,
+        )
+        self.toolbar.grid(row=0, column=0, columnspan=3, sticky="nsew")
 
-        actions = tk.Frame(lists_frame)
-        actions.grid(row=2, column=0, sticky="ew", pady=(8, 0))
-        self.clip_button = tk.Button(actions, text="Clip", command=self._clip_lines)
-        self.clip_button.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        self.clear_button = tk.Button(actions, text="Clear", command=self._clear_canvas)
-        self.clear_button.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        self.clip_button = self.toolbar.clip_button
+        self.clear_button = self.toolbar.clear_button
 
     def _bind_events(self):
         self.canvas.bind("<Button-1>", self._on_mouse_down)
@@ -271,7 +213,7 @@ class MainWindow:
             self.clipped_canvas_items.clear()
             self.clipped_shape_canvas_items.clear()
             self.clipped_lines.clear()
-            self.lines_after_list.delete(0, tk.END)
+            self.panels.clear_after()
 
             if self.clipping_window_item is not None:
                 self.canvas.delete(self.clipping_window_item)
@@ -316,10 +258,7 @@ class MainWindow:
                     "width": self.line_width.get(),
                 }
             )
-            self.lines_before_list.insert(
-                tk.END,
-                self._format_shape_before(self.shapes[-1]),
-            )
+            self.panels.add_before_item(self._format_shape_before(self.shapes[-1]))
             self.shape_preview = None
             self.shape_mode = None
             return
@@ -333,9 +272,8 @@ class MainWindow:
         )
 
         self.lines.append(line)
-        self.lines_before_list.insert(
-            tk.END,
-            f"Line {len(self.lines)}: {self._format_line(line)}",
+        self.panels.add_before_item(
+            f"Line {len(self.lines)}: {self._format_line(line)}"
         )
 
         self.preview_line = None
@@ -429,7 +367,7 @@ class MainWindow:
         self.clipped_canvas_items.clear()
         self.clipped_shape_canvas_items.clear()
         self.clipped_lines.clear()
-        self.lines_after_list.delete(0, tk.END)
+        self.panels.clear_after()
 
     def _clip_lines(self):
         self._clear_clipped_results()
@@ -458,16 +396,12 @@ class MainWindow:
             print()
 
             if clipped is None:
-                self.lines_after_list.insert(
-                    tk.END,
-                    f"Line {line_number}: Rejected / Outside",
-                )
+                self.panels.add_after_item(f"Line {line_number}: Rejected / Outside")
                 continue
 
             self.clipped_lines.append(clipped)
-            self.lines_after_list.insert(
-                tk.END,
-                f"Line {line_number}: {self._format_line(clipped)}",
+            self.panels.add_after_item(
+                f"Line {line_number}: {self._format_line(clipped)}"
             )
 
             clipped_color = "red"
@@ -521,10 +455,7 @@ class MainWindow:
                 else:
                     summary = "Partially clipped"
 
-                self.lines_after_list.insert(
-                    tk.END,
-                    f"Rectangle {shape['number']}: {summary}",
-                )
+                self.panels.add_after_item(f"Rectangle {shape['number']}: {summary}")
                 for edge_name, original, clipped in edge_results:
                     if clipped is None:
                         edge_result = "Rejected / Outside"
@@ -535,10 +466,7 @@ class MainWindow:
                             else "clipped segment"
                         )
                         edge_result = f"{state} {self._format_line(clipped)}"
-                    self.lines_after_list.insert(
-                        tk.END,
-                        f"  {edge_name}: {edge_result}",
-                    )
+                    self.panels.add_after_item(f"  {edge_name}: {edge_result}")
                 continue
 
             circle_segments = self._shape_segments(shape)
@@ -573,10 +501,7 @@ class MainWindow:
                 summary = f"Unchanged / Fully Inside ({visible_segments} visible segments)"
             else:
                 summary = f"Partially clipped ({visible_segments} visible segments)"
-            self.lines_after_list.insert(
-                tk.END,
-                f"Circle {shape['number']}: {summary}",
-            )
+            self.panels.add_after_item(f"Circle {shape['number']}: {summary}")
 
     def _clear_canvas(self):
         self.canvas.delete("all")
@@ -586,8 +511,8 @@ class MainWindow:
         self.shapes.clear()
         self.clipped_canvas_items.clear()
         self.clipped_shape_canvas_items.clear()
-        self.lines_before_list.delete(0, tk.END)
-        self.lines_after_list.delete(0, tk.END)
+        self.panels.clear_before()
+        self.panels.clear_after()
 
         self.clipping_window = None
         self.clipping_window_item = None
