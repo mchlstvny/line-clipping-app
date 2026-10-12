@@ -463,7 +463,10 @@ class MainWindow:
 
     def _fade_color(self, color: str) -> str:
         channels = self.root.winfo_rgb(color)
-        faded = [round((channel / 257 + 255) / 2) for channel in channels]
+        faded = [
+            round((channel / 257) * 0.3 + 255 * 0.7)
+            for channel in channels
+        ]
         return "#" + "".join(f"{channel:02x}" for channel in faded)
 
     def _fade_original_drawings(self):
