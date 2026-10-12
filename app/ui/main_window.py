@@ -1,5 +1,7 @@
 import tkinter as tk
+from tkinter import ttk
 import math
+from tkinter import colorchooser
 from app.core.geometry import Line, Point, Rectangle
 from app.services.clipping_service import clip_line
 from app.ui.panels import Panels
@@ -13,8 +15,14 @@ class MainWindow:
         self.root.title("Line Clipping App")
         self.root.geometry("1000x650")
         self.root.minsize(800, 500)
+        self._configure_theme()
 
-        self.create_mode = tk.StringVar(value="line")
+        self.create_modes = {
+            "line": tk.BooleanVar(value=True),
+            "clipping-area": tk.BooleanVar(value=False),
+            "rectangle": tk.BooleanVar(value=False),
+            "circle": tk.BooleanVar(value=False),
+        }
         self.selected_algorithm = tk.StringVar(value="cohen-sutherland")
         self.line_color = tk.StringVar(value="Black")
         self.line_width = tk.IntVar(value=2)
@@ -23,6 +31,7 @@ class MainWindow:
         self.start_y = None
         self.preview_line = None
         self.lines = []
+        self.original_line_items = []
         self.clipped_lines = []
         self.shapes = []
 
@@ -30,18 +39,52 @@ class MainWindow:
         self.clipped_canvas_items = []
         self.clipped_shape_canvas_items = []
 
-        self.is_drawing_window = False
+        self.gesture_modes = set()
         self.window_start_x = None
         self.window_start_y = None
         self.clipping_window = None
         self.window_preview = None
         self.shape_start_x = None
         self.shape_start_y = None
-        self.shape_preview = None
-        self.shape_mode = None
+        self.shape_previews = {}
 
         self._build_ui()
         self._bind_events()
+
+    def _configure_theme(self):
+        self.root.configure(background="#f3f5f7")
+        style = ttk.Style(self.root)
+        style.theme_use("clam")
+        style.configure(".", font=("TkDefaultFont", 10), foreground="#202a36")
+        style.configure("TFrame", background="#f3f5f7")
+        style.configure("TLabel", background="#f3f5f7", foreground="#202a36")
+        style.configure(
+            "TLabelframe",
+            background="#f3f5f7",
+            bordercolor="#cbd3dd",
+            relief="solid",
+        )
+        style.configure(
+            "TLabelframe.Label",
+            background="#f3f5f7",
+            foreground="#24364b",
+            font=("TkDefaultFont", 10, "bold"),
+        )
+        style.configure("TCheckbutton", background="#f3f5f7", padding=(2, 3))
+        style.configure("TRadiobutton", background="#f3f5f7", padding=(2, 3))
+        style.configure("TButton", padding=(9, 5))
+        style.configure(
+            "Primary.TButton",
+            background="#2864c7",
+            foreground="#ffffff",
+            padding=(10, 6),
+        )
+        style.map(
+            "Primary.TButton",
+            background=[("active", "#1e52a7"), ("disabled", "#aab8ca")],
+            foreground=[("disabled", "#f3f5f7")],
+        )
+        style.configure("TCombobox", fieldbackground="#ffffff", padding=4)
 
     def _build_ui(self):
         self.root.columnconfigure(0, weight=1)
@@ -49,7 +92,14 @@ class MainWindow:
         self.root.columnconfigure(2, weight=1)
         self.root.rowconfigure(1, weight=1)
 
-        self.canvas = tk.Canvas(self.root, background="white", highlightthickness=1)
+        self.canvas = tk.Canvas(
+            self.root,
+            background="white",
+            highlightthickness=1,
+            highlightbackground="#cbd3dd",
+            highlightcolor="#2864c7",
+            borderwidth=0,
+        )
         self.canvas.grid(
             row=1,
             column=0,
@@ -59,7 +109,7 @@ class MainWindow:
             pady=(0, 12),
         )
 
-        self.lists_frame = tk.Frame(self.root)
+        self.lists_frame = ttk.Frame(self.root)
         self.lists_frame.grid(
             row=1,
             column=2,
@@ -73,15 +123,16 @@ class MainWindow:
 
         self.panels = Panels(self.lists_frame)
         self.panels.grid(row=0, column=0, sticky="nsew")
-        actions = tk.Frame(self.lists_frame)
+        actions = ttk.Frame(self.lists_frame)
         actions.grid(row=1, column=0, sticky="ew", pady=(8, 0))
 
         self.toolbar = Toolbar(
             self.root,
-            self.create_mode,
+            self.create_modes,
             self.selected_algorithm,
             self.line_color,
             self.line_width,
+            self._choose_line_color,
             self._on_create_mode_changed,
             self._clip_lines,
             self._clear_canvas,
@@ -97,20 +148,51 @@ class MainWindow:
         self.canvas.bind("<B1-Motion>", self._on_mouse_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_mouse_up)
 
+    def _choose_line_color(self):
+        initial_color = self.line_color.get()
+        if self._is_black_color(initial_color):
+            initial_color = "#007aff"
+        _, selected_color = colorchooser.askcolor(
+            color=initial_color,
+            parent=self.root,
+            title="Choose Color",
+        )
+        if selected_color:
+            self.line_color.set(selected_color)
+
+    def _is_black_color(self, color: str) -> bool:
+        try:
+            return self.root.winfo_rgb(color) == (0, 0, 0)
+        except tk.TclError:
+            return color.lower() in ("black", "#000", "#000000")
+
+    def _is_red_color(self, color: str) -> bool:
+        try:
+            return self.root.winfo_rgb(color) == (65535, 0, 0)
+        except tk.TclError:
+            return color.lower() == "red"
+
     def _on_create_mode_changed(self):
-        self.is_drawing_window = self.create_mode.get() == "clipping-area"
-        if not self.is_drawing_window and self.window_preview is not None:
+        if self.window_preview is not None:
             self.canvas.delete(self.window_preview)
             self.window_preview = None
-        if self.shape_preview is not None:
-            self.canvas.delete(self.shape_preview)
-            self.shape_preview = None
+        for preview in self.shape_previews.values():
+            self.canvas.delete(preview)
+        self.shape_previews.clear()
         if self.preview_line is not None:
             self.canvas.delete(self.preview_line)
             self.preview_line = None
+        self.gesture_modes.clear()
 
     def _on_mouse_down(self, event):
-        if self.is_drawing_window:
+        self.gesture_modes = {
+            mode for mode, variable in self.create_modes.items() if variable.get()
+        }
+        if not self.gesture_modes:
+            return
+
+        if "clipping-area" in self.gesture_modes:
+            self.gesture_modes = {"clipping-area"}
             self.window_start_x = event.x
             self.window_start_y = event.y
 
@@ -121,13 +203,24 @@ class MainWindow:
                 event.y,
                 outline="blue",
                 width=2,
+                dash=(5, 4),
             )
 
-            return
+        if "line" in self.gesture_modes:
+            self.start_x = event.x
+            self.start_y = event.y
+            self.preview_line = self.canvas.create_line(
+                self.start_x,
+                self.start_y,
+                self.start_x,
+                self.start_y,
+                fill=self.line_color.get(),
+                width=self.line_width.get(),
+            )
 
-        mode = self.create_mode.get()
-        if mode in ("rectangle", "circle"):
-            self.shape_mode = mode
+        for mode in ("rectangle", "circle"):
+            if mode not in self.gesture_modes:
+                continue
             self.shape_start_x = event.x
             self.shape_start_y = event.y
             create_shape = (
@@ -135,7 +228,7 @@ class MainWindow:
                 if mode == "rectangle"
                 else self.canvas.create_oval
             )
-            self.shape_preview = create_shape(
+            self.shape_previews[mode] = create_shape(
                 event.x,
                 event.y,
                 event.x,
@@ -143,28 +236,9 @@ class MainWindow:
                 outline=self.line_color.get().lower(),
                 width=self.line_width.get(),
             )
-            return
-
-        if mode != "line":
-            return
-
-        self.start_x = event.x
-        self.start_y = event.y
-
-        self.preview_line = self.canvas.create_line(
-            self.start_x,
-            self.start_y,
-            self.start_x,
-            self.start_y,
-            fill=self.line_color.get(),
-            width=self.line_width.get(),
-        )
 
     def _on_mouse_drag(self, event):
-        if self.is_drawing_window:
-            if self.window_preview is None:
-                return
-
+        if "clipping-area" in self.gesture_modes and self.window_preview is not None:
             self.canvas.coords(
                 self.window_preview,
                 self.window_start_x,
@@ -173,47 +247,39 @@ class MainWindow:
                 event.y,
             )
 
-            return
-
-        if self.shape_preview is not None:
+        for preview in self.shape_previews.values():
             self.canvas.coords(
-                self.shape_preview,
+                preview,
                 self.shape_start_x,
                 self.shape_start_y,
                 event.x,
                 event.y,
             )
-            return
 
-        if self.preview_line is None:
-            return
-
-        self.canvas.coords(
-            self.preview_line,
-            self.start_x,
-            self.start_y,
-            event.x,
-            event.y,
-        )
+        if self.preview_line is not None:
+            self.canvas.coords(
+                self.preview_line,
+                self.start_x,
+                self.start_y,
+                event.x,
+                event.y,
+            )
 
     def _on_mouse_up(self, event):
-        if self.is_drawing_window:
-            if self.window_preview is None:
-                return
-
+        if "clipping-area" in self.gesture_modes and self.window_preview is not None:
+            self.canvas.coords(
+                self.window_preview,
+                self.window_start_x,
+                self.window_start_y,
+                event.x,
+                event.y,
+            )
             xmin = min(self.window_start_x, event.x)
             xmax = max(self.window_start_x, event.x)
             ymin = min(self.window_start_y, event.y)
             ymax = max(self.window_start_y, event.y)
 
-            for item in self.clipped_canvas_items:
-                self.canvas.delete(item)
-            for item in self.clipped_shape_canvas_items:
-                self.canvas.delete(item)
-            self.clipped_canvas_items.clear()
-            self.clipped_shape_canvas_items.clear()
-            self.clipped_lines.clear()
-            self.panels.clear_after()
+            self._clear_clipped_results()
 
             if self.clipping_window_item is not None:
                 self.canvas.delete(self.clipping_window_item)
@@ -227,14 +293,40 @@ class MainWindow:
 
             self.clipping_window_item = self.window_preview
             self.window_preview = None
+            self.create_modes["clipping-area"].set(False)
 
             print("Created clipping window:", self.clipping_window)
-
+            self.gesture_modes.clear()
             return
 
-        if self.shape_preview is not None:
+        if self.preview_line is not None:
             self.canvas.coords(
-                self.shape_preview,
+                self.preview_line,
+                self.start_x,
+                self.start_y,
+                event.x,
+                event.y,
+            )
+
+            line = Line(
+                start=Point(self.start_x, self.start_y),
+                end=Point(event.x, event.y),
+            )
+            self.lines.append(line)
+            self.original_line_items.append(
+                (self.preview_line, self.line_color.get())
+            )
+            self._add_line_coordinates(
+                self.panels.add_before_item,
+                f"Line {len(self.lines)}",
+                line,
+            )
+            self.preview_line = None
+            print("Created line:", line)
+
+        for mode, preview in self.shape_previews.items():
+            self.canvas.coords(
+                preview,
                 self.shape_start_x,
                 self.shape_start_y,
                 event.x,
@@ -247,45 +339,38 @@ class MainWindow:
                 max(self.shape_start_y, event.y),
             )
             shape_number = 1 + sum(
-                shape["kind"] == self.shape_mode for shape in self.shapes
+                shape["kind"] == mode for shape in self.shapes
             )
             self.shapes.append(
                 {
-                    "kind": self.shape_mode,
+                    "kind": mode,
                     "number": shape_number,
                     "bounds": bounds,
                     "color": self.line_color.get().lower(),
                     "width": self.line_width.get(),
+                    "canvas_item": preview,
                 }
             )
             self.panels.add_before_item(self._format_shape_before(self.shapes[-1]))
-            self.shape_preview = None
-            self.shape_mode = None
-            return
-
-        if self.preview_line is None:
-            return
-
-        line = Line(
-            start=Point(self.start_x, self.start_y),
-            end=Point(event.x, event.y),
-        )
-
-        self.lines.append(line)
-        self.panels.add_before_item(
-            f"Line {len(self.lines)}: {self._format_line(line)}"
-        )
-
-        self.preview_line = None
-
-        print("Created line:", line)
+        self.shape_previews.clear()
+        self.gesture_modes.clear()
 
     @staticmethod
-    def _format_line(line: Line) -> str:
+    def _format_coordinate(value: float) -> str:
+        return f"{value:.3f}".rstrip("0").rstrip(".")
+
+    @classmethod
+    def _format_point(cls, point: Point) -> str:
         return (
-            f"({line.start.x:g}, {line.start.y:g}) -> "
-            f"({line.end.x:g}, {line.end.y:g})"
+            f"({cls._format_coordinate(point.x)}, "
+            f"{cls._format_coordinate(point.y)})"
         )
+
+    @classmethod
+    def _add_line_coordinates(cls, add_item, heading: str, line: Line) -> None:
+        add_item(f"{heading}:")
+        add_item(f"  Point A: {cls._format_point(line.start)}")
+        add_item(f"  Point B: {cls._format_point(line.end)}")
 
     @staticmethod
     def _format_shape_before(shape) -> str:
@@ -359,6 +444,7 @@ class MainWindow:
         ]
 
     def _clear_clipped_results(self):
+        self._restore_original_colors()
         for item in self.clipped_canvas_items:
             self.canvas.delete(item)
         for item in self.clipped_shape_canvas_items:
@@ -368,6 +454,26 @@ class MainWindow:
         self.clipped_shape_canvas_items.clear()
         self.clipped_lines.clear()
         self.panels.clear_after()
+
+    def _restore_original_colors(self):
+        for item, color in self.original_line_items:
+            self.canvas.itemconfigure(item, fill=color)
+        for shape in self.shapes:
+            self.canvas.itemconfigure(shape["canvas_item"], outline=shape["color"])
+
+    def _fade_color(self, color: str) -> str:
+        channels = self.root.winfo_rgb(color)
+        faded = [round((channel / 257 + 255) / 2) for channel in channels]
+        return "#" + "".join(f"{channel:02x}" for channel in faded)
+
+    def _fade_original_drawings(self):
+        for item, color in self.original_line_items:
+            self.canvas.itemconfigure(item, fill=self._fade_color(color))
+        for shape in self.shapes:
+            self.canvas.itemconfigure(
+                shape["canvas_item"],
+                outline=self._fade_color(shape["color"]),
+            )
 
     def _clip_lines(self):
         self._clear_clipped_results()
@@ -400,13 +506,15 @@ class MainWindow:
                 continue
 
             self.clipped_lines.append(clipped)
-            self.panels.add_after_item(
-                f"Line {line_number}: {self._format_line(clipped)}"
+            self._add_line_coordinates(
+                self.panels.add_after_item,
+                f"Line {line_number}",
+                clipped,
             )
 
             clipped_color = "red"
 
-            if self.line_color.get().lower() == "red":
+            if self._is_red_color(self.line_color.get()):
                 clipped_color = "blue"
 
             item = self.canvas.create_line(
@@ -421,7 +529,7 @@ class MainWindow:
             self.clipped_canvas_items.append(item)
 
         for shape in self.shapes:
-            clipped_color = "blue" if shape["color"] == "red" else "red"
+            clipped_color = "blue" if self._is_red_color(shape["color"]) else "red"
             if shape["kind"] == "rectangle":
                 edge_results = []
                 for edge_name, segment in self._rectangle_edges(shape):
@@ -458,15 +566,21 @@ class MainWindow:
                 self.panels.add_after_item(f"Rectangle {shape['number']}: {summary}")
                 for edge_name, original, clipped in edge_results:
                     if clipped is None:
-                        edge_result = "Rejected / Outside"
-                    else:
-                        state = (
-                            "visible segment"
-                            if self._same_line(original, clipped)
-                            else "clipped segment"
+                        self.panels.add_after_item(
+                            f"  {edge_name}: Rejected / Outside"
                         )
-                        edge_result = f"{state} {self._format_line(clipped)}"
-                    self.panels.add_after_item(f"  {edge_name}: {edge_result}")
+                        continue
+
+                    state = (
+                        "visible segment"
+                        if self._same_line(original, clipped)
+                        else "clipped segment"
+                    )
+                    self._add_line_coordinates(
+                        self.panels.add_after_item,
+                        f"  {edge_name}: {state}",
+                        clipped,
+                    )
                 continue
 
             circle_segments = self._shape_segments(shape)
@@ -503,10 +617,13 @@ class MainWindow:
                 summary = f"Partially clipped ({visible_segments} visible segments)"
             self.panels.add_after_item(f"Circle {shape['number']}: {summary}")
 
+        self._fade_original_drawings()
+
     def _clear_canvas(self):
         self.canvas.delete("all")
 
         self.lines.clear()
+        self.original_line_items.clear()
         self.clipped_lines.clear()
         self.shapes.clear()
         self.clipped_canvas_items.clear()
@@ -519,11 +636,11 @@ class MainWindow:
 
         self.preview_line = None
         self.window_preview = None
-        self.shape_preview = None
-        self.shape_mode = None
+        self.shape_previews.clear()
 
-        self.create_mode.set("line")
-        self.is_drawing_window = False
+        for mode, variable in self.create_modes.items():
+            variable.set(mode == "line")
+        self.gesture_modes.clear()
 
         self.start_x = None
         self.start_y = None
